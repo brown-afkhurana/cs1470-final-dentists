@@ -57,7 +57,7 @@ class GAN(tf.keras.Model):
     def __init__(self,
                  generator,
                  discriminator,
-                 noise_generator='normal'):
+                 noise_shape='normal'):
         super().__init__()
         self.generator = generator
         self.discriminator = discriminator
@@ -65,11 +65,21 @@ class GAN(tf.keras.Model):
         self.generator_loss     = tf.keras.losses.BinaryCrossentropy(from_logits=discriminator.return_logits)
         self.discriminator_loss = tf.keras.losses.BinaryCrossentropy(from_logits=discriminator.return_logits)
 
-        match noise_generator:
+        self.noise_generator = tf.random.Generator.from_seed(SEED)
+
+        self.noise_shape = noise_shape
+
+
+    def call(self, inputs):
+        return self.generator(inputs)
+
+
+    def get_noise(self, batch_size):
+        match self.noise_shape:
             case 'normal':
-                self.noise_generator = tf.random.Generator.from_seed(SEED)
+                return self.noise_generator.normal(shape=(batch_size, *self.generator.hardcode_input_shape))
             case _:
-                raise NotImplementedError
+                raise
 
 
     def compile(self,
@@ -88,7 +98,7 @@ class GAN(tf.keras.Model):
 
         with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
             # generation
-            noise = self.noise_generator.normal(shape=(batch_size, *self.generator.hardcode_input_shape))
+            noise = self.get_noise(batch_size)
             generator_output = self.generator(noise)  #TODO is training=True needed?
 
             # discrimination preprocessing
@@ -112,9 +122,22 @@ class GAN(tf.keras.Model):
             generator_labels = tf.zeros(batch_size)  # generator is looking for zeros (incorrect) output from discriminator
             discriminator_outputs_from_generator = tf.gather(discriminator_output,
                                                              tf.where(discriminator_labels)) # indices where correct answer was 1 (fake)
-            # print(discriminator_outputs_from_generator.shape)
+            discriminator_outputs_from_data      = tf.gather(discriminator_output,
+                                                             tf.where(
+                                                                tf.equal(discriminator_labels, 0))) # indices where correct answer was 0 (real)
             discriminator_outputs_from_generator = tf.squeeze(discriminator_outputs_from_generator)
+            discriminator_outputs_from_data      = tf.squeeze(discriminator_outputs_from_data)
             generator_loss = self.generator_loss(generator_labels, discriminator_outputs_from_generator)
+
+            # accuracies
+            # discriminator_accuracy = tf.reduce_mean(
+            #     tf.keras.metrics.binary_accuracy(discriminator_labels, discriminator_output))
+            discriminator_accuracy_fake = tf.reduce_mean(
+                tf.keras.metrics.binary_accuracy(tf.ones(batch_size), discriminator_outputs_from_generator))
+            discriminator_accuracy_real = tf.reduce_mean(
+                tf.keras.metrics.binary_accuracy(tf.zeros(batch_size), discriminator_outputs_from_data))
+            generator_accuracy = tf.reduce_mean(
+                tf.keras.metrics.binary_accuracy(generator_labels, discriminator_outputs_from_generator))
 
         # generator update
         generator_grads = generator_tape.gradient(generator_loss, self.generator.trainable_weights)
@@ -123,5 +146,8 @@ class GAN(tf.keras.Model):
         discriminator_grads = discriminator_tape.gradient(discriminator_loss, self.discriminator.trainable_weights)
         self.discriminator_optimizer.apply_gradients(zip(discriminator_grads, self.discriminator.trainable_weights))
 
-        return {'G_loss': generator_loss, 'D_loss': discriminator_loss}
-
+        return {'G_loss': generator_loss, 
+                'D_loss': discriminator_loss,
+                'G_acc': generator_accuracy,
+                'D_acc_R': discriminator_accuracy_real,
+                'D_acc_F': discriminator_accuracy_fake}

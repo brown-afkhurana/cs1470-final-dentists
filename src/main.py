@@ -3,6 +3,7 @@ import numpy as np
 
 from preprocessing import get_data_CIFAR
 from models import GAN, Generator, Discriminator
+from utils import generate_and_save_images
 
 
 def main():
@@ -20,14 +21,21 @@ def main():
                                   return_logits=True)
     gan = GAN(generator=generator,
               discriminator=discriminator)
-
+    gan.build(input_shape=(None, 100))
     gan.compile()
-    gan.fit(train_cifar_images_0,
+    history = gan.fit(train_cifar_images_0,
             train_cifar_images_0,
             epochs=10,
             batch_size=128,
             # validation_data=test_cifar_images_0,
             )
+
+    # save the model to disk
+    gan.save('models/gan')
+    
+    # generate and save images
+    generate_and_save_images(gan)
+    
 
 
 if __name__ == '__main__':
