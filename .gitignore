@@ -127,4 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+#### PERSONAL ####
 .vscode/settings.json
+images/*
+models/*
+src/tmp.bat

@@ -1,42 +1,46 @@
+import os
+import shutil
+
 import tensorflow as tf
 
 
 SEED = 8675309
 
+FROM_LOGITS = True
+
 
 class Generator(tf.keras.Model):
-    def __init__(self,
-                 latent_shape=(100,),
-                 generation_shape=(28,28)):
+
+    latent_shape = (100,)
+    generation_shape = (32, 32, 3)
+
+    def __init__(self):
         super().__init__()
-        self.hardcode_input_shape = latent_shape
-        self.hardcode_output_shape = generation_shape
 
         self.feedforward = tf.keras.Sequential([
             tf.keras.layers.Dense(1000),
             tf.keras.layers.LeakyReLU(0.01),
             tf.keras.layers.Dense(1000),
             tf.keras.layers.LeakyReLU(0.01),
-            tf.keras.layers.Dense(tf.math.reduce_prod(self.hardcode_output_shape), activation='tanh'),  #TODO don't hardcode
-            tf.keras.layers.Reshape(self.hardcode_output_shape)
+            tf.keras.layers.Dense(tf.math.reduce_prod(self.generation_shape), activation='tanh'),  #TODO don't hardcode
+            tf.keras.layers.Reshape(self.generation_shape)
         ])
         
 
-    def call(self, x, training=False):
+    def call(self, x, training=False) -> tf.Tensor:
         #TODO does this have to be in the context of a GradientTape if training?
-        return self.feedforward(x)
-
+        output = self.feedforward(x)
+        if not isinstance(output, tf.Tensor):
+            raise
+        return output
 
 class Discriminator(tf.keras.Model):
-    def __init__(self,
-                 generation_shape=(28, 28, 1),
-                 return_logits=True):
-        super().__init__()
-        self.hardcode_input_shape = generation_shape
-        self.hardcode_output_shape = (1,)
+    generation_shape = (32, 32, 3)
 
-        self.return_logits = return_logits
-        final_activation = None if return_logits else 'sigmoid'
+    def __init__(self):
+        super().__init__()
+
+        final_activation = None if FROM_LOGITS else 'sigmoid'
 
         self.feedforward = tf.keras.Sequential([
             tf.keras.layers.Flatten(),
@@ -47,40 +51,43 @@ class Discriminator(tf.keras.Model):
             tf.keras.layers.Dense(1, activation=final_activation),
         ])
 
-    def call(self, x, training=False):
-        #TODO does this have to be in the context of a GradientTape if training?
-        # answer is potentially no beacuse the gradient tape is in GAN.train_step()
-        return self.feedforward(x)
+    def call(self, x, training=False) -> tf.Tensor:
+        output = self.feedforward(x)
+        if not isinstance(output, tf.Tensor):
+            raise
+        return output
 
 
 class GAN(tf.keras.Model):
     def __init__(self,
-                 generator,
-                 discriminator,
-                 noise_shape='normal'):
+                 generator: tf.keras.Model,
+                 discriminator: tf.keras.Model,
+                 noise_shape='normal',
+                 seed=SEED):
         super().__init__()
         self.generator = generator
         self.discriminator = discriminator
 
-        self.generator_loss     = tf.keras.losses.BinaryCrossentropy(from_logits=discriminator.return_logits)
-        self.discriminator_loss = tf.keras.losses.BinaryCrossentropy(from_logits=discriminator.return_logits)
+        self.generator_loss     = tf.keras.losses.BinaryCrossentropy(from_logits=FROM_LOGITS)
+        self.discriminator_loss = tf.keras.losses.BinaryCrossentropy(from_logits=FROM_LOGITS)
 
-        self.noise_generator = tf.random.Generator.from_seed(SEED)
+        self.seed = seed
+        self.noise_generator = tf.random.Generator.from_seed(seed)
 
         self.noise_shape = noise_shape
 
-
-    def call(self, inputs):
-        return self.generator(inputs)
-
+    def call(self, inputs) -> tf.Tensor:
+        output = self.generator(inputs)
+        if not isinstance(output, tf.Tensor):
+            raise
+        return output
 
     def get_noise(self, batch_size):
         match self.noise_shape:
             case 'normal':
-                return self.noise_generator.normal(shape=(batch_size, *self.generator.hardcode_input_shape))
+                return self.noise_generator.normal(shape=(batch_size, *Generator.latent_shape))
             case _:
-                raise
-
+                raise NotImplementedError(f'Noise shape {self.noise_shape} not implemented')
 
     def compile(self,
                 generator_optimizer=tf.keras.optimizers.Adam(),
@@ -98,8 +105,8 @@ class GAN(tf.keras.Model):
 
         with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
             # generation
-            noise = self.get_noise(batch_size)
-            generator_output = self.generator(noise)  #TODO is training=True needed?
+            noise = self.noise_generator.normal(shape=(batch_size, *Generator.latent_shape))
+            generator_output = self.generator(noise)
 
             # discrimination preprocessing
             discriminator_input = tf.concat([x, generator_output], 0)
@@ -151,3 +158,33 @@ class GAN(tf.keras.Model):
                 'G_acc': generator_accuracy,
                 'D_acc_R': discriminator_accuracy_real,
                 'D_acc_F': discriminator_accuracy_fake}
+
+    def save(self, filepath):
+        # delete filepath if exists
+        if os.path.exists(filepath):
+            shutil.rmtree(filepath)
+        # create empty directory at filepath
+        os.mkdir(filepath)
+
+        # save generator
+        self.generator.save(os.path.join(filepath, 'generator'))
+        # save discriminator
+        self.discriminator.save(os.path.join(filepath, 'discriminator'))
+
+    @classmethod
+    def load(cls, filepath):
+        # load generator
+        generator = tf.keras.models.load_model(os.path.join(filepath, 'generator'))
+        # load discriminator
+        discriminator = tf.keras.models.load_model(os.path.join(filepath, 'discriminator'))
+
+        if not (isinstance(generator, tf.keras.Model) and isinstance(discriminator, tf.keras.Model)):
+            raise  # for typing purposes
+
+        # typechecking
+        if not (isinstance(generator, tf.keras.Model) and isinstance(discriminator, tf.keras.Model)):
+            raise TypeError('Generator and discriminator must be instances of tf.keras.Model')
+
+        return cls(generator,
+                   discriminator,
+                   seed=SEED)
