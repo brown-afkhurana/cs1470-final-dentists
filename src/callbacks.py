@@ -33,7 +33,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
         self.incremented = False
 
     def on_epoch_end(self, epoch, logs={}):
-        if epoch == 15 and logs['D_loss'][-1] < 0.001:
+        if epoch == 15 and logs['D_loss'] < 0.001:
             # increase generator LR
             old_value = self.model.gen_optimizer.learning_rate
             new_value = self.model.gen_optimizer.learning_rate + self.gen_increment
