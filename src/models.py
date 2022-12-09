@@ -250,7 +250,7 @@ class CGAN(GAN):
             gen_labels_to_concat = tf.tile(labels[:, None],
                                            [1, self.generator.latent_shape[0]])
             gen_labels_to_concat = tf.cast(gen_labels_to_concat, tf.float32)
-            generator_input = tf.concat([noise, gen_labels_to_concat], 1)
+            generator_input = tf.concat([noise, gen_labels_to_concat], 1)  # this is incorrect
             generator_output = self.generator(generator_input)
 
             # discrimination preprocessing
