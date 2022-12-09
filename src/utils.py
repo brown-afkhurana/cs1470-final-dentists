@@ -1,7 +1,6 @@
 import os
 
 import tensorflow as tf
-import imageio
 
 from models import GAN, Generator, Discriminator
 
