@@ -37,7 +37,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
             # increase generator LR
             old_value = self.model.generator_optimizer.learning_rate
             new_value = self.model.generator_optimizer.learning_rate + self.gen_increment
-            print(f'increasing generator LR from {old_value} to {new_value}')
+            print(f'\nincreasing generator LR from {old_value} to {new_value}')
             self.model.generator_optimizer.learning_rate.assign(new_value)
             self.incremented = True
         
@@ -45,6 +45,6 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
             # decrease generator LR
             old_value = self.model.generator_optimizer.learning_rate
             new_value = self.model.generator_optimizer.learning_rate - self.gen_increment
-            print(f'decreasing generator LR from {old_value} to {new_value}')
+            print(f'\ndecreasing generator LR from {old_value} to {new_value}')
             self.model.generator_optimizer.learning_rate.assign(new_value)
             self.incremented = False
