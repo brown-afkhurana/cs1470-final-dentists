@@ -3,7 +3,7 @@ import tensorflow as tf
 
 import numpy as np
 
-def get_data_MNIST(subset):
+def get_data_MNIST(subset, return_one_hot=True):
     (train_image, train_label), (test_image, test_label) = tf.keras.datasets.mnist.load_data()
     #60,000 training images and 10,000 test images
 
@@ -17,14 +17,20 @@ def get_data_MNIST(subset):
         train_image = tf.expand_dims(train_image, axis=-1)
         train_image = tf.image.resize(train_image, [32,32])
         image = train_image/255
-        label = tf.one_hot(train_label, depth)
+        if return_one_hot:
+            label = tf.one_hot(train_label, depth)
+        else:
+            label = train_label
 
     if subset == "test":
         test_image = tf.cast(test_image, tf.float32)
         test_image = tf.expand_dims(test_image, axis=-1)
         test_image = tf.image.resize(test_image, [32,32])
         image = test_image/255
-        label = tf.one_hot(test_label, depth)
+        if return_one_hot:
+            label = tf.one_hot(test_label, depth)
+        else:
+            label = test_label
 
     return image, label
 

@@ -12,9 +12,12 @@ def get_noise(model: GAN, n_samples):
     noise_generator = tf.random.Generator.from_seed(SEED)
     return noise_generator.normal(shape=(n_samples, *Generator.latent_shape))
 
-def generate_and_save_images(model: GAN, n_samples=5):
+def generate_and_save_images(model: GAN, n_samples=5, prefix='', noise=None):
     # generate 5 samples of the latent space
-    latent_samples = get_noise(model, n_samples)
+    if noise is None:
+        latent_samples = get_noise(model, n_samples)
+    else:
+        latent_samples = noise
 
     # generate the images
     generated_images = model.generator(latent_samples)
@@ -27,6 +30,7 @@ def generate_and_save_images(model: GAN, n_samples=5):
     image_filenames = []
     for i in range(n_samples):
         image = generated_images[i]
-        image = tf.cast(image, tf.uint8)
-        image_filename = f'images/{i}.png'
-        tf.keras.preprocessing.image.save_img(image_filename, image)
+        image = tf.cast(image, tf.float32)
+        image_filename = f'images/{prefix}{i}.png'
+        tf.keras.preprocessing.image.save_img(image_filename, image, data_format='channels_last',
+                                              file_format='png', scale=True)

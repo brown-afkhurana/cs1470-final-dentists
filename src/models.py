@@ -17,13 +17,32 @@ class Generator(tf.keras.Model):
     def __init__(self):
         super().__init__()
 
+        '''
         self.feedforward = tf.keras.Sequential([
             tf.keras.layers.Dense(1000),
             tf.keras.layers.LeakyReLU(0.01),
             tf.keras.layers.Dense(1000),
             tf.keras.layers.LeakyReLU(0.01),
-            tf.keras.layers.Dense(tf.math.reduce_prod(self.generation_shape), activation='tanh'),  #TODO don't hardcode
+            tf.keras.layers.Dense(tf.math.reduce_prod(self.generation_shape), activation='tanh'),
             tf.keras.layers.Reshape(self.generation_shape)
+        ])
+        '''
+        channels = self.generation_shape[-1]
+        self.feedforward = tf.keras.Sequential([
+            tf.keras.layers.Dense(256),
+            tf.keras.layers.LeakyReLU(0.1),
+            tf.keras.layers.Reshape((4, 4, 16)),
+            tf.keras.layers.Conv2DTranspose(32, (5, 5), strides=(2, 2), padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(0.1),
+            tf.keras.layers.Conv2DTranspose(32, (5, 5), strides=(2, 2), padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(0.1),
+            tf.keras.layers.Conv2DTranspose(32, (5, 5), strides=(2, 2), padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(0.1),
+            tf.keras.layers.Conv2DTranspose(channels, (3, 3), strides=(1, 1), padding='same'),
+            tf.keras.layers.Activation('sigmoid'),
         ])
         
 
@@ -37,17 +56,34 @@ class Generator(tf.keras.Model):
 class Discriminator(tf.keras.Model):
     generation_shape = (32, 32, 3)
 
-    def __init__(self):
+    def __init__(self, with_noise=False):
         super().__init__()
 
         final_activation = None if FROM_LOGITS else 'sigmoid'
 
-        self.feedforward = tf.keras.Sequential([
+        if with_noise:
+            noise_layer = [tf.keras.layers.GaussianNoise(0.1)]
+        else:
+            noise_layer = []
+    
+        '''
+        self.feedforward = tf.keras.Sequential(noise_layer + [
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(256),
             tf.keras.layers.LeakyReLU(0.01),
             tf.keras.layers.Dense(256),
             tf.keras.layers.LeakyReLU(0.01),
+            tf.keras.layers.Dense(1, activation=final_activation),
+        ])
+        '''
+        self.feedforward = tf.keras.Sequential([
+            tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'),
+            tf.keras.layers.LeakyReLU(0.2),
+            tf.keras.layers.Dropout(0.4),
+            tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'),
+            tf.keras.layers.LeakyReLU(0.2),
+            tf.keras.layers.Dropout(0.4),
+            tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(1, activation=final_activation),
         ])
 
@@ -119,6 +155,13 @@ class GAN(tf.keras.Model):
             discriminator_input  = tf.gather(discriminator_input, shuffled_indices)
             discriminator_labels = tf.gather(discriminator_labels, shuffled_indices)
 
+            # noise for discriminator
+            """
+            noise = self.noise_generator.normal(shape=(tf.shape(discriminator_input)))
+            noise = noise * self.discriminator_leading  # if generator leading, 0 noise
+            discriminator_input = discriminator_input + noise
+            """
+
             # discrimination
             discriminator_output = self.discriminator(discriminator_input)
 
@@ -135,6 +178,8 @@ class GAN(tf.keras.Model):
             discriminator_outputs_from_generator = tf.squeeze(discriminator_outputs_from_generator)
             discriminator_outputs_from_data      = tf.squeeze(discriminator_outputs_from_data)
             generator_loss = self.generator_loss(generator_labels, discriminator_outputs_from_generator)
+            # blackscreen loss
+            # generator_loss += tf.reduce_mean(tf.reduce_max(generator_output, axis=(1, 2, 3)))
 
             # accuracies
             # discriminator_accuracy = tf.reduce_mean(
@@ -145,6 +190,8 @@ class GAN(tf.keras.Model):
                 tf.keras.metrics.binary_accuracy(tf.zeros(batch_size), discriminator_outputs_from_data))
             generator_accuracy = tf.reduce_mean(
                 tf.keras.metrics.binary_accuracy(generator_labels, discriminator_outputs_from_generator))
+
+            # self.discriminator_leading = tf.math.sigmoid(discriminator_accuracy_fake - generator_accuracy)
 
         # generator update
         generator_grads = generator_tape.gradient(generator_loss, self.generator.trainable_weights)
@@ -188,3 +235,81 @@ class GAN(tf.keras.Model):
         return cls(generator,
                    discriminator,
                    seed=SEED)
+
+class CGAN(GAN):
+    def train_step(self, x):
+        # x is real data
+        x, labels = x
+        x = tf.cast(x, tf.float32)
+        batch_size = tf.shape(x)[0]
+
+        with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
+            # generation
+            noise = self.noise_generator.normal(shape=(batch_size, *Generator.latent_shape))
+            # add conditional label to noise
+            gen_labels_to_concat = tf.tile(labels[:, None],
+                                           [1, self.generator.latent_shape[0]])
+            gen_labels_to_concat = tf.cast(gen_labels_to_concat, tf.float32)
+            generator_input = tf.concat([noise, gen_labels_to_concat], 1)
+            generator_output = self.generator(generator_input)
+
+            # discrimination preprocessing
+            discriminator_input = tf.concat([x, generator_output], 0)
+            discriminator_labels = tf.concat([tf.zeros(batch_size),    # real
+                                              tf.ones(batch_size)],    # fake
+                                              0)
+
+            # discriminator input/label shuffling
+            shuffled_indices = tf.random.shuffle(tf.range(2 * batch_size))
+            discriminator_input  = tf.gather(discriminator_input, shuffled_indices)
+            discriminator_labels = tf.gather(discriminator_labels, shuffled_indices)
+
+            # noise for discriminator
+            """
+            noise = self.noise_generator.normal(shape=(tf.shape(discriminator_input)))
+            noise = noise * self.discriminator_leading  # if generator leading, 0 noise
+            discriminator_input = discriminator_input + noise
+            """
+            # add conditional label to discriminator input
+            disc_labels_to_concat = tf.tile(labels[:, None, None, None],
+                                            [1, *(self.discriminator.generation_shape[:-1]), 1])
+            disc_labels_to_concat = tf.cast(disc_labels_to_concat, tf.float32)
+            discriminator_input = tf.concat([discriminator_input, disc_labels_to_concat], -1)
+
+            # discrimination
+            discriminator_output = self.discriminator(discriminator_input)
+
+            # discriminator loss
+            discriminator_loss = self.discriminator_loss(discriminator_labels, discriminator_output)
+            
+            # generator loss
+            generator_labels = tf.zeros(batch_size)  # generator is looking for zeros (incorrect) output from discriminator
+            discriminator_outputs_from_generator = tf.gather(discriminator_output,
+                                                             tf.where(discriminator_labels)) # indices where correct answer was 1 (fake)
+            discriminator_outputs_from_data      = tf.gather(discriminator_output,
+                                                             tf.where(
+                                                                tf.equal(discriminator_labels, 0))) # indices where correct answer was 0 (real)
+            discriminator_outputs_from_generator = tf.squeeze(discriminator_outputs_from_generator)
+            discriminator_outputs_from_data      = tf.squeeze(discriminator_outputs_from_data)
+            generator_loss = self.generator_loss(generator_labels, discriminator_outputs_from_generator)
+
+            discriminator_accuracy_fake = tf.reduce_mean(
+                tf.keras.metrics.binary_accuracy(tf.ones(batch_size), discriminator_outputs_from_generator))
+            discriminator_accuracy_real = tf.reduce_mean(
+                tf.keras.metrics.binary_accuracy(tf.zeros(batch_size), discriminator_outputs_from_data))
+            generator_accuracy = tf.reduce_mean(
+                tf.keras.metrics.binary_accuracy(generator_labels, discriminator_outputs_from_generator))
+
+
+        # generator update
+        generator_grads = generator_tape.gradient(generator_loss, self.generator.trainable_weights)
+        self.generator_optimizer.apply_gradients(zip(generator_grads, self.generator.trainable_weights))
+        # discriminator update
+        discriminator_grads = discriminator_tape.gradient(discriminator_loss, self.discriminator.trainable_weights)
+        self.discriminator_optimizer.apply_gradients(zip(discriminator_grads, self.discriminator.trainable_weights))
+
+        return {'G_loss': generator_loss, 
+                'D_loss': discriminator_loss,
+                'G_acc': generator_accuracy,
+                'D_acc_R': discriminator_accuracy_real,
+                'D_acc_F': discriminator_accuracy_fake}
