@@ -24,3 +24,20 @@ class StopDLossLow(tf.keras.callbacks.Callback):
         if current < self.threshold:
             print(f"\nEpoch {epoch+1}: early stopping THR")
             self.model.stop_training = True
+
+class LRUpdateCallback(tf.keras.callbacks.Callback):
+    def __init__(self, model, gen_increment=0.0002):
+        super().__init__()
+        self.model = model
+        self.gen_increment = gen_increment
+        self.incremented = False
+
+    def on_epoch_end(self, epoch, logs={}):
+        if epoch == 15 and logs['D_loss'][-1] < 0.001:
+            # increase generator LR
+            self.model.gen_optimizer.lr += self.gen_increment
+            self.incremented = True
+        
+        if epoch == 50 and self.incremented:
+            # decrease generator LR
+            self.model.gen_optimizer.lr -= self.gen_increment

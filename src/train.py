@@ -6,7 +6,7 @@ import numpy as np
 from preprocessing import get_data_CIFAR, get_data_MNIST
 from models import GAN, Generator, Discriminator, CGAN
 from utils import generate_and_save_images
-from callbacks import EpochVisualizer, StopDLossLow
+from callbacks import EpochVisualizer, StopDLossLow, LRUpdateCallback
 
 
 def load_gan_and_generate_images():
@@ -83,10 +83,13 @@ def train_mnist(epochs=10,
     
     gan.compile(gen_optimizer, disc_optimizer)
 
-    # because EpochVisualizer takes model as input
+    # instantiate callbacks that take model as input
     if EpochVisualizer in callbacks:
         callbacks.remove(EpochVisualizer)
         callbacks = [EpochVisualizer(gan, viz_prefix)] + callbacks
+    if LRUpdateCallback in callbacks:
+        callbacks.remove(LRUpdateCallback)
+        callbacks = [LRUpdateCallback(gan)] + callbacks
 
     history = gan.fit(train_mnist_images,
             train_mnist_labels,
@@ -171,7 +174,7 @@ def train_all_mnist_gans(epochs=100):
         model, history = train_mnist(epochs=epochs,
                                      use_cgan=False,
                                      subset=i,
-                                     callbacks=[EpochVisualizer],
+                                     callbacks=[EpochVisualizer, LRUpdateCallback],
                                      gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
                                      disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
                                      viz_prefix=f'mnist/{i}/')
