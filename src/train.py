@@ -89,7 +89,7 @@ def train_mnist(epochs=10,
         callbacks = [EpochVisualizer(gan, viz_prefix)] + callbacks
     if LRUpdateCallback in callbacks:
         callbacks.remove(LRUpdateCallback)
-        callbacks = [LRUpdateCallback(gan)] + callbacks
+        callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002)] + callbacks
 
     history = gan.fit(train_mnist_images,
             train_mnist_labels,

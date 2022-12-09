@@ -26,25 +26,39 @@ class StopDLossLow(tf.keras.callbacks.Callback):
             self.model.stop_training = True
 
 class LRUpdateCallback(tf.keras.callbacks.Callback):
-    def __init__(self, model, gen_increment=0.0002):
+    def __init__(self, model, patience=3, gen_increment=0.0002):
         super().__init__()
         self.model = model
+        self.patience = patience
         self.gen_increment = gen_increment
-        self.incremented = False
+
+        self.incremented = 0
+
+        self.epochs_below_threshold = 0
+        self.epoch_to_start_checking = 5
+
 
     def on_epoch_end(self, epoch, logs={}):
-        if epoch == 15 and logs['G_acc'] < 0.01:
+        if epoch < self.epoch_to_start_checking:
+            return
+
+        if logs['G_acc'] < 0.01:
+            self.epochs_below_threshold += 1
+        else:
+            self.epochs_below_threshold = 0
+        
+        if self.epochs_below_threshold >= self.patience:
             # increase generator LR
             old_value = self.model.generator_optimizer.learning_rate
             new_value = self.model.generator_optimizer.learning_rate + self.gen_increment
             print(f'\nincreasing generator LR from {old_value} to {new_value}')
             self.model.generator_optimizer.learning_rate.assign(new_value)
-            self.incremented = True
+            self.incremented += self.gen_increment  
         
         if epoch == 50 and self.incremented:
             # decrease generator LR
             old_value = self.model.generator_optimizer.learning_rate
-            new_value = self.model.generator_optimizer.learning_rate - self.gen_increment
+            new_value = self.model.generator_optimizer.learning_rate - self.incremented
             print(f'\ndecreasing generator LR from {old_value} to {new_value}')
             self.model.generator_optimizer.learning_rate.assign(new_value)
             self.incremented = False
