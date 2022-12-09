@@ -172,32 +172,31 @@ def train_all_mnist_gans(epochs=100):
                                      use_cgan=False,
                                      subset=i,
                                      callbacks=[EpochVisualizer],
-                                     gen_optimizer=tf.keras.optimizers.Adam(0.0004, beta_1=0.5),
+                                     gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
                                      disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
                                      viz_prefix=f'mnist/{i}/')
         model.save(f'models/gan/mnist_{i}')
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train', action='store_true')
-    parser.add_argument('--tune', action='store_true')
+    # parser.add_argument('--train', action='store_true')
+    # parser.add_argument('--tune', action='store_true')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--cgan', action='store_true')
     args = parser.parse_args()
 
-    if args.train:
-        if args.cgan:
-            model, history = train_mnist(epochs=args.epochs,
-                                   use_cgan=True)
-        else:
-            # model, history = train_mnist(epochs=args.epochs,
-            #                        use_cgan=False,
-            #                        subset=0,
-            #                        callbacks=[EpochVisualizer],
-            #                        gen_optimizer=tf.keras.optimizers.Adam(0.0004, beta_1=0.5),
-            #                        disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
-            #                        viz_prefix='mnist/0/')
-            train_all_mnist_gans(epochs=args.epochs)
+    if args.cgan:
+        model, history = train_mnist(epochs=args.epochs,
+                                use_cgan=True)
+    else:
+        # model, history = train_mnist(epochs=args.epochs,
+        #                        use_cgan=False,
+        #                        subset=0,
+        #                        callbacks=[EpochVisualizer],
+        #                        gen_optimizer=tf.keras.optimizers.Adam(0.0004, beta_1=0.5),
+        #                        disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
+        #                        viz_prefix='mnist/0/')
+        train_all_mnist_gans(epochs=args.epochs)
 
     model.save('models/gan')
 

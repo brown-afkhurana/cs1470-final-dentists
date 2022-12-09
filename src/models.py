@@ -211,7 +211,7 @@ class GAN(tf.keras.Model):
         if os.path.exists(filepath):
             shutil.rmtree(filepath)
         # create empty directory at filepath
-        os.mkdir(filepath)
+        os.makedirs(filepath)
 
         # save generator
         self.generator.save(os.path.join(filepath, 'generator'))

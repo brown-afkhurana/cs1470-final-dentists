@@ -32,5 +32,8 @@ def generate_and_save_images(model: GAN, n_samples=5, prefix='', noise=None):
         image = generated_images[i]
         image = tf.cast(image, tf.float32)
         image_filename = f'images/{prefix}{i}.png'
+        if not os.path.exists(os.path.dirname(image_filename)):
+            os.makedirs(os.path.dirname(image_filename))
         tf.keras.preprocessing.image.save_img(image_filename, image, data_format='channels_last',
-                                              file_format='png', scale=True)
+                                            file_format='png', scale=True)
+        
