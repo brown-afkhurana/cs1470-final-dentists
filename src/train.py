@@ -3,7 +3,7 @@ import argparse
 import tensorflow as tf
 import numpy as np
 
-from preprocessing import get_data_CIFAR, get_data_MNIST
+from preprocessing import get_data_CIFAR, get_data_MNIST, get_data_CIFAR10H
 from models import GAN, Generator, Discriminator, CGAN
 from utils import generate_and_save_images
 from callbacks import EpochVisualizer, StopDLossLow, LRUpdateCallback, DiscriminatorSuspensionCallback
@@ -122,6 +122,52 @@ def train_cifar(epochs=10,
 
     return gan, history
 
+
+def train_cifar_10h(epochs=10,
+                   latent_size=100,
+                   gen_optimizer=tf.keras.optimizers.Adam(1e-3),
+                   disc_optimizer=tf.keras.optimizers.Adam(1e-3),
+                   batch_size=128,
+                   subset=None,
+                   callbacks: list=[],
+                   viz_prefix=''):
+    # load data
+    train_cifar_images, train_cifar_labels = get_data_CIFAR10H('train', return_one_hot=False)
+    # train_cifar_labels = tf.squeeze(train_cifar_labels, axis=1)
+    if subset is not None:
+        train_cifar_images = tf.gather(train_cifar_images, tf.where(train_cifar_labels == subset))
+        train_cifar_labels = tf.gather(train_cifar_labels, tf.where(train_cifar_labels == subset))
+
+        # axis fix
+        train_cifar_images = tf.squeeze(train_cifar_images, axis=1)
+
+    # model prep
+    Generator.generation_shape = (32, 32, 3)
+    Discriminator.generation_shape = (32, 32, 3)
+    generator = Generator()
+    discriminator = Discriminator(with_noise=False, dropout=0.2, complex=True)
+
+    # build gan
+    gan = GAN(generator=generator,
+            discriminator=discriminator)
+    gan.build(input_shape=(None, latent_size))
+    
+    
+    gan.compile(gen_optimizer, disc_optimizer)
+
+    # instantiate callbacks that take model as input
+    if EpochVisualizer in callbacks:
+        callbacks.remove(EpochVisualizer)
+        callbacks = [EpochVisualizer(gan, viz_prefix)] + callbacks
+
+    history = gan.fit(train_cifar_images,
+            train_cifar_labels,
+            epochs=epochs,
+            batch_size=batch_size,
+            callbacks=callbacks)
+
+    return gan, history
+
     
 def train_all_mnist_gans(epochs=100):
     for i in range(10):
@@ -136,6 +182,7 @@ def train_all_mnist_gans(epochs=100):
                                      disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
                                      viz_prefix=f'mnist/{i}/')
         model.save(f'models/gan/mnist_{i}')
+
 
 def retrain_mnist_gans_subset(subset: list[int], epochs=100):
     for i in subset:
@@ -218,6 +265,17 @@ def train_all_cifar_gans(epochs=100):
         model.save(f'models/gan/cifar_{i}')
 
 
+def train_all_cifar_10h_gans(epochs=100):
+    for i in range(10):
+        model, history = train_cifar_10h(epochs=epochs,
+                                     subset=i,
+                                     callbacks=[EpochVisualizer],
+                                     gen_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                     disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                     viz_prefix=f'cifar10h/{i}/')
+        model.save(f'models/gan/cifar10h_{i}')
+
+
 def main():
     parser = argparse.ArgumentParser()
     # parser.add_argument('--train', action='store_true')
@@ -233,6 +291,8 @@ def main():
             train_all_mnist_gans(epochs=args.epochs)
         case 'cifar', None:
             train_all_cifar_gans(epochs=args.epochs)
+        case 'cifar10h', None:
+            train_all_cifar_10h_gans(epochs=args.epochs)
         case 'mnist', [1]:
             retrain_mnist_gan_1(epochs=args.epochs)
         case 'mnist', list():
