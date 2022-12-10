@@ -44,7 +44,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
         self.gen_increment = gen_increment
         self.metric = metric
 
-        self.epoch_to_start_checking = 3
+        self.epoch_to_start_checking = -1
         self.hold_for_epochs = 5
         self.threshold = 0.01
 
@@ -102,4 +102,14 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
                     self.epochs_until_decrement = self.hold_for_epochs
                 case _:
                     raise
-        
+
+class DiscriminatorSuspensionCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs={}):
+        if logs['G_acc'] == 0:
+            if self.model.discriminator.trainable:
+                print(f'\nDiscriminator suspended at epoch {epoch}')
+                self.model.discriminator.trainable = False
+        else:
+            if not self.model.discriminator.trainable:
+                print(f'\nDiscriminator unsuspended at epoch {epoch}')
+                self.model.discriminator.trainable = True
