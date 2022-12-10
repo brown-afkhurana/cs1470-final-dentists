@@ -56,7 +56,7 @@ class Generator(tf.keras.Model):
 class Discriminator(tf.keras.Model):
     generation_shape = (32, 32, 3)
 
-    def __init__(self, with_noise=False):
+    def __init__(self, with_noise=False, dropout=0.4, complex=False):
         super().__init__()
 
         final_activation = None if FROM_LOGITS else 'sigmoid'
@@ -65,6 +65,8 @@ class Discriminator(tf.keras.Model):
             noise_layer = [tf.keras.layers.GaussianNoise(0.1)]
         else:
             noise_layer = []
+
+        self.dropout = dropout
     
         '''
         self.feedforward = tf.keras.Sequential(noise_layer + [
@@ -76,16 +78,30 @@ class Discriminator(tf.keras.Model):
             tf.keras.layers.Dense(1, activation=final_activation),
         ])
         '''
-        self.feedforward = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'),
-            tf.keras.layers.LeakyReLU(0.2),
-            tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'),
-            tf.keras.layers.LeakyReLU(0.2),
-            tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(1, activation=final_activation),
-        ])
+        if complex:
+            self.feedforward = tf.keras.Sequential([
+                tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'),
+                tf.keras.layers.LeakyReLU(0.2),
+                tf.keras.layers.Dropout(self.dropout),
+                tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), padding='same'),
+                tf.keras.layers.LeakyReLU(0.2),
+                tf.keras.layers.Dropout(self.dropout),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(1, activation=final_activation),
+            ])
+        else:
+            self.feedforward = tf.keras.Sequential([
+                tf.keras.layers.Conv2D(64, (3, 3), padding='same'),
+                tf.keras.layers.LeakyReLU(0.2),
+                tf.keras.layers.Dropout(self.dropout),
+                tf.keras.layers.Conv2D(128, (3, 3), strides=(2, 2), padding='same'),
+                tf.keras.layers.LeakyReLU(0.2),
+                tf.keras.layers.Dropout(self.dropout),
+                tf.keras.layers.Conv2D(128, (3, 3), strides=(2, 2), padding='same'),
+                tf.keras.layers.LeakyReLU(0.2),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(1, activation=final_activation),
+            ])
 
     def call(self, x, training=False) -> tf.Tensor:
         output = self.feedforward(x)
