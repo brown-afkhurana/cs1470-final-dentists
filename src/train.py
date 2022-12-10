@@ -103,7 +103,10 @@ def train_cifar(epochs=10,
         callbacks = [EpochVisualizer(gan, viz_prefix)] + callbacks
     if LRUpdateCallback in callbacks:
         callbacks.remove(LRUpdateCallback)
-        callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002)] + callbacks
+        callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002, metric='G_acc')] + callbacks
+    if LRUpdateCallback in callbacks:  # still
+        callbacks.remove(LRUpdateCallback)
+        callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002, metric='D_acc_F')] + callbacks
 
     history = gan.fit(train_cifar_images,
             train_cifar_labels,
@@ -138,8 +141,8 @@ def retrain_mnist_gans_subset(subset: list[int], epochs=100):
                                         use_cgan=False,
                                         subset=i,
                                         callbacks=[EpochVisualizer, LRUpdateCallback],
-                                        gen_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
-                                        disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                        gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
+                                        disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
                                         viz_prefix=f'mnist/{i}/')
             success = not model.stop_training
         if not success:
@@ -152,9 +155,9 @@ def train_all_cifar_gans(epochs=100):
         model, history = train_cifar(epochs=epochs,
                                      use_cgan=False,
                                      subset=i,
-                                     callbacks=[EpochVisualizer, LRUpdateCallback],
-                                     gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
-                                     disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
+                                     callbacks=[EpochVisualizer, LRUpdateCallback, LRUpdateCallback],
+                                     gen_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                     disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
                                      viz_prefix=f'cifar/{i}/')
         model.save(f'models/gan/cifar_{i}')
 

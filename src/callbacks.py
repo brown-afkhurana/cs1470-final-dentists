@@ -37,11 +37,12 @@ class StopDLossLow(tf.keras.callbacks.Callback):
 
 
 class LRUpdateCallback(tf.keras.callbacks.Callback):
-    def __init__(self, model, patience=3, gen_increment=0.0002):
+    def __init__(self, model, patience=3, gen_increment=0.0002, metric='G_acc'):
         super().__init__()
         self.model = model
         self.patience = patience
         self.gen_increment = gen_increment
+        self.metric = metric
 
         self.epoch_to_start_checking = 3
         self.hold_for_epochs = 5
@@ -57,27 +58,48 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
 
         self.epochs_until_decrement -= 1
 
-        if logs['G_acc'] < self.threshold:
+        if logs[self.metric] < self.threshold:
             self.epochs_below_threshold += 1
         else:
             self.epochs_below_threshold = 0
             # only decrease LR to normal if still behaving
             if self.epochs_until_decrement == 0 and self.incremented:
                 # decrease generator LR
-                old_value = self.model.generator_optimizer.learning_rate
-                new_value = self.model.generator_optimizer.learning_rate - self.incremented
-                print(f'\ndecreasing generator LR from {old_value} to {new_value}')
-                self.model.generator_optimizer.learning_rate.assign(new_value)
-                self.incremented = False
+                match self.metric:
+                    case 'G_acc':
+                        old_value = self.model.generator_optimizer.learning_rate
+                        new_value = self.model.generator_optimizer.learning_rate - self.incremented
+                        print(f'\ndecreasing generator LR from {old_value} to {new_value}')
+                        self.model.generator_optimizer.learning_rate.assign(new_value)
+                        self.incremented = False
+                    case 'D_acc':
+                        old_value = self.model.discriminator_optimizer.learning_rate
+                        new_value = self.model.discriminator_optimizer.learning_rate - self.incremented
+                        print(f'\ndecreasing discriminator LR from {old_value} to {new_value}')
+                        self.model.discriminator_optimizer.learning_rate.assign(new_value)
+                        self.incremented = False
+                    case _:
+                        raise
 
         if self.epochs_below_threshold >= self.patience:
             # increase generator LR
-            old_value = self.model.generator_optimizer.learning_rate
-            new_value = self.model.generator_optimizer.learning_rate + self.gen_increment
-            print(f'\nincreasing generator LR from {old_value} to {new_value}')
-            self.model.generator_optimizer.learning_rate.assign(new_value)
-            self.incremented += self.gen_increment
-            self.epochs_below_threshold = 0
-            self.epochs_until_decrement = self.hold_for_epochs
-
+            match self.metric:
+                case 'G_acc':
+                    old_value = self.model.generator_optimizer.learning_rate
+                    new_value = self.model.generator_optimizer.learning_rate + self.gen_increment
+                    print(f'\nincreasing generator LR from {old_value} to {new_value}')
+                    self.model.generator_optimizer.learning_rate.assign(new_value)
+                    self.incremented += self.gen_increment
+                    self.epochs_below_threshold = 0
+                    self.epochs_until_decrement = self.hold_for_epochs
+                case 'D_acc':
+                    old_value = self.model.discriminator_optimizer.learning_rate
+                    new_value = self.model.discriminator_optimizer.learning_rate + self.gen_increment
+                    print(f'\nincreasing discriminator LR from {old_value} to {new_value}')
+                    self.model.discriminator_optimizer.learning_rate.assign(new_value)
+                    self.incremented += self.gen_increment
+                    self.epochs_below_threshold = 0
+                    self.epochs_until_decrement = self.hold_for_epochs
+                case _:
+                    raise
         
