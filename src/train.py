@@ -149,7 +149,7 @@ def retrain_mnist_gans_subset(subset: list[int], epochs=100):
             model, history = train_mnist(epochs=epochs,
                                         use_cgan=False,
                                         subset=i,
-                                        callbacks=[EpochVisualizer],
+                                        callbacks=[EpochVisualizer, StopDLossLow()],
                                         gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
                                         disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
                                         viz_prefix=f'mnist/{i}/')
@@ -183,7 +183,8 @@ def retrain_mnist_gan_1(epochs=100):
 
         # build gan
         gan = GAN(generator=generator,
-                discriminator=discriminator)
+                discriminator=discriminator,
+                gen_steps=3)
         gan.build(input_shape=(None, 100))
         
         
@@ -191,7 +192,7 @@ def retrain_mnist_gan_1(epochs=100):
                     tf.keras.optimizers.Adam(0.0002, beta_1=0.6),)
 
         # instantiate callbacks that take model as input
-        callbacks = [EpochVisualizer(gan, 'mnist/1/')]
+        callbacks = [EpochVisualizer(gan, 'mnist/1/'), StopDLossLow(threshold=0.005)]
 
         history = gan.fit(train_mnist_images,
                 train_mnist_labels,
