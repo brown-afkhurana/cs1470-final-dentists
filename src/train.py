@@ -197,6 +197,8 @@ def retrain_mnist_gans_subset(subset: list[int], epochs=100):
                                         disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
                                         viz_prefix=f'mnist/{i}/')
             success = not model.stop_training
+        if not success:
+            print('Training failed. Moving on.')
 
         model.save(f'models/gan/mnist_{i}')
 
