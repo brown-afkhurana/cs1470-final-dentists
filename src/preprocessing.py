@@ -66,7 +66,7 @@ def get_data_CIFAR(subset, return_one_hot = True):
 
     return image, label
 
-def get_data_CIFAR10H(return_one_hot = True):
+def get_data_CIFAR10H(subset, return_one_hot = True):  # subset is a null variable
     #cifar10h-probs.npy should be stored in the data package
     
     (train_image, train_label), (test_image, test_label) = tf.keras.datasets.cifar10.load_data()
@@ -80,15 +80,17 @@ def get_data_CIFAR10H(return_one_hot = True):
     test_image = tf.cast(test_image, tf.float32)
     # test_image = tf.expand_dims(test_image, axis=-1)
     # test_image = tf.image.resize(test_image, [32,32,3])
-    image = test_image/255
+    image = test_image/255.0
 
-    CIFAR10H_file_path = '../data/cifar10h-probs.npy'
+    # CIFAR10H_file_path = '../data/cifar10h-probs.npy'
+    CIFAR10H_file_path = 'data/cifar10h-probs.npy'
     probability_labels = np.load(CIFAR10H_file_path)
 
     # convert the 10000x10 array into a 10000 element list of labels
-    for probability_distribution in probability_labels:
-        image_label = probability_distribution.index(max(probability_distribution))
-        probability_distribution = image_label
+    # for probability_distribution in probability_labels:
+    #     image_label = tf.argmax(probability_distribution, axis=-1)
+    #     probability_distribution = image_label
+    probability_labels = tf.argmax(probability_labels, axis=-1)
 
     if return_one_hot:
         label = tf.one_hot(probability_labels, depth)
