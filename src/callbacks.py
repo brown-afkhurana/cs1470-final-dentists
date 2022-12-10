@@ -72,7 +72,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
                         print(f'\ndecreasing generator LR from {old_value} to {new_value}')
                         self.model.generator_optimizer.learning_rate.assign(new_value)
                         self.incremented = False
-                    case 'D_acc':
+                    case 'D_acc_F':
                         old_value = self.model.discriminator_optimizer.learning_rate
                         new_value = self.model.discriminator_optimizer.learning_rate - self.incremented
                         print(f'\ndecreasing discriminator LR from {old_value} to {new_value}')
@@ -92,7 +92,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
                     self.incremented += self.gen_increment
                     self.epochs_below_threshold = 0
                     self.epochs_until_decrement = self.hold_for_epochs
-                case 'D_acc':
+                case 'D_acc_F':
                     old_value = self.model.discriminator_optimizer.learning_rate
                     new_value = self.model.discriminator_optimizer.learning_rate + self.gen_increment
                     print(f'\nincreasing discriminator LR from {old_value} to {new_value}')
