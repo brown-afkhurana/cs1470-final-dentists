@@ -44,7 +44,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
         self.gen_increment = gen_increment
         self.metric = metric
 
-        self.epoch_to_start_checking = 3
+        self.epoch_to_start_checking = -1
         self.hold_for_epochs = 5
         self.threshold = 0.01
 
@@ -72,7 +72,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
                         print(f'\ndecreasing generator LR from {old_value} to {new_value}')
                         self.model.generator_optimizer.learning_rate.assign(new_value)
                         self.incremented = False
-                    case 'D_acc':
+                    case 'D_acc_F':
                         old_value = self.model.discriminator_optimizer.learning_rate
                         new_value = self.model.discriminator_optimizer.learning_rate - self.incremented
                         print(f'\ndecreasing discriminator LR from {old_value} to {new_value}')
@@ -92,7 +92,7 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
                     self.incremented += self.gen_increment
                     self.epochs_below_threshold = 0
                     self.epochs_until_decrement = self.hold_for_epochs
-                case 'D_acc':
+                case 'D_acc_F':
                     old_value = self.model.discriminator_optimizer.learning_rate
                     new_value = self.model.discriminator_optimizer.learning_rate + self.gen_increment
                     print(f'\nincreasing discriminator LR from {old_value} to {new_value}')
@@ -102,4 +102,14 @@ class LRUpdateCallback(tf.keras.callbacks.Callback):
                     self.epochs_until_decrement = self.hold_for_epochs
                 case _:
                     raise
-        
+
+class DiscriminatorSuspensionCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs={}):
+        if logs['G_acc'] == 0:
+            if self.model.discriminator.trainable:
+                print(f'\nDiscriminator suspended at epoch {epoch}')
+                self.model.discriminator.trainable = False
+        else:
+            if not self.model.discriminator.trainable:
+                print(f'\nDiscriminator unsuspended at epoch {epoch}')
+                self.model.discriminator.trainable = True
