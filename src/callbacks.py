@@ -14,14 +14,21 @@ class EpochVisualizer(tf.keras.callbacks.Callback):
         generate_and_save_images(prefix=f'{self.prefix}{epoch}_', model=self.model, n_samples=8, noise=self.sample_inputs)
 
 class StopDLossLow(tf.keras.callbacks.Callback):
-    def __init__(self, threshold):
+    def __init__(self, threshold=0.01, patience=3):
         super().__init__()
         self.threshold = threshold
+        self.patience = patience
+        self.epochs_remaining = self.patience
 
     def on_epoch_end(self, epoch, logs={}):
         current = logs['D_loss']
 
         if current < self.threshold:
+            self.epochs_remaining -= 1
+        else:
+            self.epochs_remaining = self.patience
+        
+        if self.epochs_remaining == 0:
             print(f"\nEpoch {epoch+1}: early stopping THR")
             self.model.stop_training = True
 

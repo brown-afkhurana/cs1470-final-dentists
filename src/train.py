@@ -180,6 +180,26 @@ def train_all_mnist_gans(epochs=100):
                                      viz_prefix=f'mnist/{i}/')
         model.save(f'models/gan/mnist_{i}')
 
+def retrain_mnist_gans_subset(subset: list[int], epochs=100):
+    for i in subset:
+        success = False
+        tries = 0
+        max_tries = 10
+        while not success:
+            tries += 1
+            if tries > max_tries:
+                break
+            model, history = train_mnist(epochs=epochs,
+                                        use_cgan=False,
+                                        subset=i,
+                                        callbacks=[EpochVisualizer, LRUpdateCallback],
+                                        gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
+                                        disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
+                                        viz_prefix=f'mnist/{i}/')
+            success = not model.stop_training
+
+        model.save(f'models/gan/mnist_{i}')
+
 def main():
     parser = argparse.ArgumentParser()
     # parser.add_argument('--train', action='store_true')
