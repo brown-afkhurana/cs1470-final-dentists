@@ -6,7 +6,7 @@ import numpy as np
 from preprocessing import get_data_CIFAR, get_data_MNIST
 from models import GAN, Generator, Discriminator, CGAN
 from utils import generate_and_save_images
-from callbacks import EpochVisualizer, StopDLossLow, LRUpdateCallback
+from callbacks import EpochVisualizer, StopDLossLow, LRUpdateCallback, DiscriminatorSuspensionCallback
 
 
 def train_mnist(epochs=10,
@@ -30,7 +30,7 @@ def train_mnist(epochs=10,
     Generator.generation_shape = (32, 32, 1)
     Discriminator.generation_shape = (32, 32, 1)
     generator = Generator()
-    discriminator = Discriminator(with_noise=False)
+    discriminator = Discriminator(with_noise=False, complex=True)
 
     # build gan
     if use_cgan:
@@ -51,6 +51,9 @@ def train_mnist(epochs=10,
     if LRUpdateCallback in callbacks:
         callbacks.remove(LRUpdateCallback)
         callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002)] + callbacks
+    if DiscriminatorSuspensionCallback in callbacks:
+        callbacks.remove(DiscriminatorSuspensionCallback)
+        callbacks = [DiscriminatorSuspensionCallback()] + callbacks
 
     history = gan.fit(train_mnist_images,
             train_mnist_labels,
@@ -104,9 +107,12 @@ def train_cifar(epochs=10,
     if LRUpdateCallback in callbacks:
         callbacks.remove(LRUpdateCallback)
         callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002, metric='G_acc')] + callbacks
-    if LRUpdateCallback in callbacks:  # still
+    if LRUpdateCallback in callbacks:  # two LRupdate ==> for G and for D_F
         callbacks.remove(LRUpdateCallback)
         callbacks = [LRUpdateCallback(gan, patience=3, gen_increment=0.0002, metric='D_acc_F')] + callbacks
+    if DiscriminatorSuspensionCallback in callbacks:
+        callbacks.remove(DiscriminatorSuspensionCallback)
+        callbacks = [DiscriminatorSuspensionCallback(gan)] + callbacks
 
     history = gan.fit(train_cifar_images,
             train_cifar_labels,
@@ -119,12 +125,15 @@ def train_cifar(epochs=10,
     
 def train_all_mnist_gans(epochs=100):
     for i in range(10):
+        # callbacks = [EpochVisualizer, LRUpdateCallback]
+        # callbacks = [EpochVisualizer, DiscriminatorSuspensionCallback]
+        callbacks = [EpochVisualizer]
         model, history = train_mnist(epochs=epochs,
                                      use_cgan=False,
                                      subset=i,
-                                     callbacks=[EpochVisualizer, LRUpdateCallback],
-                                     gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
-                                     disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
+                                     callbacks=callbacks,
+                                     gen_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                     disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
                                      viz_prefix=f'mnist/{i}/')
         model.save(f'models/gan/mnist_{i}')
 
@@ -140,7 +149,7 @@ def retrain_mnist_gans_subset(subset: list[int], epochs=100):
             model, history = train_mnist(epochs=epochs,
                                         use_cgan=False,
                                         subset=i,
-                                        callbacks=[EpochVisualizer, LRUpdateCallback],
+                                        callbacks=[EpochVisualizer],
                                         gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
                                         disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.6),
                                         viz_prefix=f'mnist/{i}/')
@@ -150,12 +159,58 @@ def retrain_mnist_gans_subset(subset: list[int], epochs=100):
 
         model.save(f'models/gan/mnist_{i}')
 
+
+def retrain_mnist_gan_1(epochs=100):
+    success = False
+    tries = 0
+    max_tries = 10
+    while not success:
+        tries += 1
+        if tries > max_tries:
+            break
+        # load data
+        train_mnist_images, train_mnist_labels = get_data_MNIST('train', return_one_hot=False)
+        train_mnist_images = tf.gather(train_mnist_images, tf.where(train_mnist_labels == 1))
+        train_mnist_labels = tf.gather(train_mnist_labels, tf.where(train_mnist_labels == 1))
+        # axis fix
+        train_mnist_images = tf.squeeze(train_mnist_images, axis=1)
+
+        # model prep
+        Generator.generation_shape = (32, 32, 1)
+        Discriminator.generation_shape = (32, 32, 1)
+        generator = Generator()
+        discriminator = Discriminator(with_noise=False, complex=True)
+
+        # build gan
+        gan = GAN(generator=generator,
+                discriminator=discriminator)
+        gan.build(input_shape=(None, 100))
+        
+        
+        gan.compile(tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
+                    tf.keras.optimizers.Adam(0.0002, beta_1=0.6),)
+
+        # instantiate callbacks that take model as input
+        callbacks = [EpochVisualizer(gan, 'mnist/1/')]
+
+        history = gan.fit(train_mnist_images,
+                train_mnist_labels,
+                epochs=epochs,
+                batch_size=128,
+                callbacks=callbacks)
+        
+        success = not gan.stop_training
+
+    gan.save(f'models/gan/mnist_{1}')
+
+
 def train_all_cifar_gans(epochs=100):
     for i in range(10):
         model, history = train_cifar(epochs=epochs,
                                      use_cgan=False,
                                      subset=i,
-                                     callbacks=[EpochVisualizer, LRUpdateCallback, LRUpdateCallback],
+                                    #  callbacks=[EpochVisualizer, LRUpdateCallback, LRUpdateCallback],
+                                     callbacks=[EpochVisualizer],
                                      gen_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
                                      disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
                                      viz_prefix=f'cifar/{i}/')
@@ -167,10 +222,22 @@ def main():
     # parser.add_argument('--train', action='store_true')
     # parser.add_argument('--tune', action='store_true')
     parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--dataset', type=str, default='cifar')
+    parser.add_argument('--subset', type=int, default=None, nargs='+')
     # parser.add_argument('--cgan', action='store_true')
     args = parser.parse_args()
 
-    train_all_cifar_gans(epochs=args.epochs)
+    match args.dataset, args.subset:
+        case 'mnist', None:
+            train_all_mnist_gans(epochs=args.epochs)
+        case 'cifar', None:
+            train_all_cifar_gans(epochs=args.epochs)
+        case 'mnist', [1]:
+            retrain_mnist_gan_1(epochs=args.epochs)
+        case 'mnist', list():
+            retrain_mnist_gans_subset(args.subset, epochs=args.epochs)
+        case 'cifar', list():
+            raise NotImplementedError('cifar retrain not implemented yet')
 
 
 if __name__ == '__main__':
