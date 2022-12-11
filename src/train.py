@@ -61,6 +61,23 @@ def train_mnist(epochs=10,
             batch_size=batch_size,
             callbacks=callbacks)
 
+    if gan.stop_training:
+        gan.stop_training = False
+        gan.gen_steps = 2
+        history = gan.fit(train_mnist_images,
+                          train_mnist_labels,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          callbacks=callbacks)
+    if gan.stop_training:
+        gan.stop_training = False
+        gan.gen_steps = 3
+        history = gan.fit(train_mnist_images,
+                          train_mnist_labels,
+                          epochs=epochs,
+                          batch_size=batch_size,
+                          callbacks=callbacks)
+
     return gan, history
 
 
@@ -173,12 +190,25 @@ def train_all_mnist_gans(epochs=100):
     for i in range(10):
         # callbacks = [EpochVisualizer, LRUpdateCallback]
         # callbacks = [EpochVisualizer, DiscriminatorSuspensionCallback]
-        callbacks = [EpochVisualizer]
+        callbacks = [EpochVisualizer, StopDLossLow(patience=10)]
         model, history = train_mnist(epochs=epochs,
                                      use_cgan=False,
                                      subset=i,
                                      callbacks=callbacks,
-                                     gen_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                     gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
+                                     disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
+                                     viz_prefix=f'mnist/{i}/')
+        model.save(f'models/gan/mnist_{i}')
+
+
+def train_mnist_gans_subset(subset: list[int], epochs=100):
+    for i in subset:
+        callbacks = [EpochVisualizer, StopDLossLow(patience=10)]
+        model, history = train_mnist(epochs=epochs,
+                                     use_cgan=False,
+                                     subset=i,
+                                     callbacks=callbacks,
+                                     gen_optimizer=tf.keras.optimizers.Adam(0.0005, beta_1=0.5),
                                      disc_optimizer=tf.keras.optimizers.Adam(0.0002, beta_1=0.5),
                                      viz_prefix=f'mnist/{i}/')
         model.save(f'models/gan/mnist_{i}')
@@ -296,7 +326,8 @@ def main():
         case 'mnist', [1]:
             retrain_mnist_gan_1(epochs=args.epochs)
         case 'mnist', list():
-            retrain_mnist_gans_subset(args.subset, epochs=args.epochs)
+            # retrain_mnist_gans_subset(args.subset, epochs=args.epochs)
+            train_mnist_gans_subset(args.subset, epochs=args.epochs)
         case 'cifar', list():
             raise NotImplementedError('cifar retrain not implemented yet')
 

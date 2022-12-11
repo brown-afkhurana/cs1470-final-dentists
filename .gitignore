@@ -137,3 +137,4 @@ dmypy.json
 images/*
 models/*
 src/tmp.bat
+*.zip
