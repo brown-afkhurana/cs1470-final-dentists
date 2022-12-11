@@ -5,14 +5,17 @@ from utils import generate_and_save_images, get_noise
 
 class EpochVisualizer(tf.keras.callbacks.Callback):
     n_samples = 50
-    def __init__(self, model, prefix='', **kwargs):
+    def __init__(self, model, prefix='', save_every_n=1, **kwargs):
         super().__init__(**kwargs)
         self.model = model
         self.prefix = prefix
+        self.save_every_n = save_every_n
         self.sample_inputs = get_noise(model, self.n_samples)
         self.imgs = []
 
     def on_epoch_end(self, epoch, logs=None):
+        if epoch % self.save_every_n != 0:
+            return
         generate_and_save_images(
             prefix=f'{self.prefix}{epoch}_', model=self.model, n_samples=self.n_samples, noise=self.sample_inputs)
 
