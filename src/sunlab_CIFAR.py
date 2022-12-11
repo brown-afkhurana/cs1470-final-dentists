@@ -6,15 +6,15 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = ''
 
 
-def load_mnist_images():
-    if os.path.exists('data/mnist_fake'):
+def load_cifar_images():
+    if os.path.exists('data/cifar_fake'):
         print('Loading tensors')
-        np_images = np.load('data/mnist_fake/images.npy')
-        np_labels = np.load('data/mnist_fake/labels.npy')
+        np_images = np.load('data/cifar_fake/images.npy')
+        np_labels = np.load('data/cifar_fake/labels.npy')
         return tf.convert_to_tensor(np_images), tf.convert_to_tensor(np_labels)
-        # return tf.io.read_file('data/mnist_fake/images'), tf.io.read_file('data/mnist_fake/labels')
+        # return tf.io.read_file('data/cifar_fake/images'), tf.io.read_file('data/cifar_fake/labels')
 
-    root_directory = 'images/mnist/'
+    root_directory = 'images/cifar/'
     all_images = []
     all_labels = []
     for i in range(10):
@@ -41,11 +41,11 @@ def load_mnist_images():
     labels = tf.convert_to_tensor(np_labels, dtype=tf.float32)
 
     print('Saving tensors')
-    # tf.io.write_file('data/mnist_fake/images', images)
-    np.save('data/mnist_fake/images.npy', np_images)
+    # tf.io.write_file('data/cifar_fake/images', images)
+    np.save('data/cifar_fake/images.npy', np_images)
     print('Saved images')
-    # tf.io.write_file('data/mnist_fake/labels', labels)
-    np.save('data/mnist_fake/labels.npy', np_labels)
+    # tf.io.write_file('data/cifar_fake/labels', labels)
+    np.save('data/cifar_fake/labels.npy', np_labels)
     print('Saved labels')
 
     return images, labels
@@ -84,8 +84,8 @@ def train_classifier(train_images, train_labels, test_images, test_labels, epoch
     return classifier, results
 
 
-def train_mnist_classifier_real():
-    (train_img, train_lab), (test_img, test_lab) = tf.keras.datasets.mnist.load_data()
+def train_cifar_classifier_real():
+    (train_img, train_lab), (test_img, test_lab) = tf.keras.datasets.cifar.load_data()
 
     train_img = tf.expand_dims(train_img, -1)
     test_img = tf.expand_dims(test_img, -1)
@@ -108,46 +108,39 @@ def train_mnist_classifier_real():
     return classifier
 
 
-def train_mnist_classifier_fake():
-    images, labels = load_mnist_images()
+def train_cifar_classifier_fake():
+    images, labels = load_cifar_images()
     print(images.shape)
     print(labels.shape)
 
-    (_, _), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
+    (_, _), (test_img, test_lab) = tf.keras.datasets.cifar.load_data()
 
+    images = tf.expand_dims(images, -1)
+    print(tf.reduce_max(images))
     images = images / 255.
-    test_images = test_images / 255.
 
     shuffled_indices = tf.random.shuffle(tf.range(images.shape[0]))
     images = tf.gather(images, shuffled_indices)
     labels = tf.gather(labels, shuffled_indices)
 
+    test_img = tf.image.resize(test_img, [32, 32])
 
-    images = tf.expand_dims(images, -1)
-    test_images = tf.expand_dims(test_images, -1)
-
-    test_images = tf.image.resize(test_images, [32, 32])
-
-    classifier, results = train_classifier(images, labels, test_images, test_labels)
+    classifier, results = train_classifier(images, labels, test_img, test_lab)
 
     return classifier
 
 
-def train_mnist_classifier_combined():
-    fake_images, fake_labels = load_mnist_images()
-    (real_images, real_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
+def train_cifar_classifier_combined():
+    fake_images, fake_labels = load_cifar_images()
+    (real_images, real_labels), (test_images, test_labels) = tf.keras.datasets.cifar.load_data()
 
-    # fake_images = tf.expand_dims(fake_images, -1)
+    fake_images = tf.expand_dims(fake_images, -1)
     real_images = tf.expand_dims(real_images, -1)
     test_images = tf.expand_dims(test_images, -1)
 
-    fake_images = tf.cast(fake_images, tf.float32)
-    real_images = tf.cast(real_images, tf.float32)
-    test_images = tf.cast(test_images, tf.float32)
-
-    fake_images = fake_images / 255.0
-    real_images = real_images / 255.0
-    test_images = test_images / 255.0
+    fake_images = fake_images / 255.
+    real_images = real_images / 255.
+    test_images = test_images / 255.
 
     real_images = tf.image.resize(real_images, [32, 32])
     test_images = tf.image.resize(test_images, [32, 32])
@@ -165,7 +158,7 @@ def train_mnist_classifier_combined():
 
 
 if __name__ == '__main__':
-    # load_mnist_images()
-    # train_mnist_classifier_real()
-    train_mnist_classifier_fake()
-    # train_mnist_classifier_combined()
+    # load_cifar_images()
+    train_cifar_classifier_real()
+    train_cifar_classifier_fake()
+    train_cifar_classifier_combined()
