@@ -102,6 +102,7 @@ class GAN(tf.keras.Model):
                  generator: tf.keras.Model,
                  discriminator: tf.keras.Model,
                  noise_shape='normal',
+                 gen_steps=1,
                  seed=SEED):
         super().__init__()
         self.generator = generator
@@ -114,6 +115,8 @@ class GAN(tf.keras.Model):
         self.noise_generator = tf.random.Generator.from_seed(seed)
 
         self.noise_shape = noise_shape
+
+        self.gen_steps = gen_steps
 
     def call(self, inputs) -> tf.Tensor:
         output = self.generator(inputs)
@@ -188,22 +191,23 @@ class GAN(tf.keras.Model):
         discriminator_grads = discriminator_tape.gradient(discriminator_loss, self.discriminator.trainable_weights)
         self.discriminator_optimizer.apply_gradients(zip(discriminator_grads, self.discriminator.trainable_weights))
 
-        # generator forward pass
-        noise = self.noise_generator.normal(shape=(batch_size, *Generator.latent_shape))
-        generator_labels = tf.zeros(batch_size)  # generator is looking for zeros (incorrect) output from discriminator
-        with tf.GradientTape() as generator_tape:
-            # generator loss
-            generator_output = self.generator(noise)
-            discriminator_outputs_from_generator = self.discriminator(generator_output)
-            generator_loss = self.generator_loss(generator_labels, discriminator_outputs_from_generator)
+        for _ in range(self.gen_steps):
+            # generator forward pass
+            noise = self.noise_generator.normal(shape=(batch_size, *Generator.latent_shape))
+            generator_labels = tf.zeros(batch_size)  # generator is looking for zeros (incorrect) output from discriminator
+            with tf.GradientTape() as generator_tape:
+                # generator loss
+                generator_output = self.generator(noise)
+                discriminator_outputs_from_generator = self.discriminator(generator_output)
+                generator_loss = self.generator_loss(generator_labels, discriminator_outputs_from_generator)
 
-            # generator accuracy
-            generator_accuracy = tf.reduce_mean(
-                tf.keras.metrics.binary_accuracy(generator_labels, discriminator_outputs_from_generator))
+                # generator accuracy
+                generator_accuracy = tf.reduce_mean(
+                    tf.keras.metrics.binary_accuracy(generator_labels, discriminator_outputs_from_generator))
 
-        # generator update
-        generator_grads = generator_tape.gradient(generator_loss, self.generator.trainable_weights)
-        self.generator_optimizer.apply_gradients(zip(generator_grads, self.generator.trainable_weights))
+            # generator update
+            generator_grads = generator_tape.gradient(generator_loss, self.generator.trainable_weights)
+            self.generator_optimizer.apply_gradients(zip(generator_grads, self.generator.trainable_weights))
         
 
         return {'G_loss': generator_loss, 
