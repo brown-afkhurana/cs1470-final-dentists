@@ -7,7 +7,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ''
 
 
 def load_mnist_images():
-    if os.path.exists('data/mnist_fake'):
+    if False and os.path.exists('data/mnist_fake'):
         print('Loading tensors')
         np_images = np.load('data/mnist_fake/images.npy')
         np_labels = np.load('data/mnist_fake/labels.npy')
@@ -42,10 +42,10 @@ def load_mnist_images():
 
     print('Saving tensors')
     # tf.io.write_file('data/mnist_fake/images', images)
-    np_images.save('data/mnist_fake/images.npy')
+    np.save('data/mnist_fake/images.npy', np_images)
     print('Saved images')
     # tf.io.write_file('data/mnist_fake/labels', labels)
-    np_labels.save('data/mnist_fake/labels.npy')
+    np.save('data/mnist_fake/labels.npy', np_labels)
     print('Saved labels')
 
     return images, labels
@@ -154,6 +154,6 @@ def train_mnist_classifier_combined():
 
 if __name__ == '__main__':
     # load_mnist_images()
-    # train_mnist_classifier_real()
+    train_mnist_classifier_real()
     train_mnist_classifier_fake()
     train_mnist_classifier_combined()
