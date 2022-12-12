@@ -33,8 +33,6 @@ def load_cifar_images():
         all_images += (array_images)
         all_labels += [i for _ in array_images]
 
-    breakpoint()
-
     np_images = np.asarray(all_images, dtype=np.float32)
     images = tf.convert_to_tensor(np_images, dtype=tf.float32)
     np_labels = np.asarray(all_labels, dtype=np.float32)
@@ -96,6 +94,7 @@ def train_cifar_classifier_real():
     test_img = test_img / 255.
 
     shuffled_indices = tf.random.shuffle(tf.range(train_img.shape[0]))
+    # shuffled_indices = shuffled_indices[:60000]
     train_img  = tf.gather(train_img, shuffled_indices)
     train_lab = tf.gather(train_lab, shuffled_indices)
 
@@ -119,6 +118,7 @@ def train_cifar_classifier_fake():
     test_images = test_images / 255.
 
     shuffled_indices = tf.random.shuffle(tf.range(images.shape[0]))
+    shuffled_indices = shuffled_indices[:60000]
     images = tf.gather(images, shuffled_indices)
     labels = tf.gather(labels, shuffled_indices)
 
@@ -149,6 +149,10 @@ def train_cifar_classifier_combined():
     real_images = tf.image.resize(real_images, [32, 32])
     test_images = tf.image.resize(test_images, [32, 32])
 
+    shuffled_indices = tf.random.shuffle(tf.range(fake_images.shape[0]))
+    fake_images = tf.gather(fake_images, shuffled_indices)
+    fake_labels = tf.gather(fake_labels, shuffled_indices)
+
     images = tf.concat([fake_images, real_images], 0)
     labels = tf.concat([fake_labels, real_labels], 0)
 
@@ -163,6 +167,6 @@ def train_cifar_classifier_combined():
 
 if __name__ == '__main__':
     # load_cifar_images()
-    # train_cifar_classifier_real()
+    train_cifar_classifier_real()
     train_cifar_classifier_fake()
     train_cifar_classifier_combined()
