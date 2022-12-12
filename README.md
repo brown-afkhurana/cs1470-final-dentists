@@ -7,10 +7,23 @@ MNIST:
     real:
         99.22% train
         98.66% test
+    fake:
+        99.68% train
+        82.24% test
+    combined:
+        98.97% train
+        98.26% test
 
 CIFAR:
     real:
-        68% test
+        77.26% train
+        67.02% test
+    fake:
+        98.16% train
+        37.44% test
+    combined:
+        80.39% train
+        58.45% test
 
 CIFAR 10-H (3000 datapoints):
     real:
