@@ -2,19 +2,21 @@ import tensorflow as tf
 import numpy as np
 import os
 
+from preprocessing import get_data_CIFAR10H, get_data_CIFAR10H_probs
+
 
 os.environ["CUDA_VISIBLE_DEVICES"] = ''
 
 
-def load_cifar_images():
-    if os.path.exists('data/cifar_fake'):
+def load_cifar_h_images():
+    if os.path.exists('data/cifar_h_fake'):
         print('Loading tensors')
-        np_images = np.load('data/cifar_fake/images.npy')
-        np_labels = np.load('data/cifar_fake/labels.npy')
+        np_images = np.load('data/cifar_h_fake/images.npy')
+        np_labels = np.load('data/cifar_h_fake/labels.npy')
         return tf.convert_to_tensor(np_images), tf.convert_to_tensor(np_labels)
-        # return tf.io.read_file('data/cifar_fake/images'), tf.io.read_file('data/cifar_fake/labels')
+        # return tf.io.read_file('data/cifar_h_fake/images'), tf.io.read_file('data/cifar_h_fake/labels')
 
-    root_directory = 'images/cifar'
+    root_directory = 'images/cifar10h_counts/'
     all_images = []
     all_labels = []
     for i in range(10):
@@ -23,17 +25,14 @@ def load_cifar_images():
         filenames = os.listdir(digit_directory)
         filenames.sort()
         pil_images = []
-        for filename in filenames[2000:]:
+        for filename in filenames[100:]:  # skip first quarter
             try:
                 pil_images.append(tf.keras.utils.load_img(f'{digit_directory}/{filename}', color_mode='rgb'))
             except FileNotFoundError:
                 breakpoint()
-        # pil_images = [tf.keras.utils.load_img(filename, grayscale=True) for filename in filenames]
         array_images = [tf.keras.utils.img_to_array(image) for image in pil_images]
         all_images += (array_images)
         all_labels += [i for _ in array_images]
-
-    breakpoint()
 
     np_images = np.asarray(all_images, dtype=np.float32)
     images = tf.convert_to_tensor(np_images, dtype=tf.float32)
@@ -41,12 +40,12 @@ def load_cifar_images():
     labels = tf.convert_to_tensor(np_labels, dtype=tf.float32)
 
     print('Saving tensors')
-    # tf.io.write_file('data/cifar_fake/images', images)
-    os.makedirs('data/cifar_fake')
-    np.save('data/cifar_fake/images.npy', np_images)
+    # tf.io.write_file('data/cifar_h_fake/images', images)
+    os.makedirs('data/cifar_h_fake')
+    np.save('data/cifar_h_fake/images.npy', np_images)
     print('Saved images')
-    # tf.io.write_file('data/cifar_fake/labels', labels)
-    np.save('data/cifar_fake/labels.npy', np_labels)
+    # tf.io.write_file('data/cifar_h_fake/labels', labels)
+    np.save('data/cifar_h_fake/labels.npy', np_labels)
     print('Saved labels')
 
     return images, labels
@@ -69,12 +68,14 @@ def train_classifier(train_images, train_labels, test_images, test_labels, epoch
         tf.keras.layers.LeakyReLU(),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(256),
-        tf.keras.layers.Dense(10),
+        tf.keras.layers.Dense(10, activation='softmax'),
     ])
 
     classifier.compile(optimizer=tf.keras.optimizers.Adam(),
-                       loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-                       metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+                    #    loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+                       loss=tf.keras.losses.MeanSquaredError(),
+                    #    loss=tf.keras.losses.KLDivergence(),
+                       metrics=[tf.keras.metrics.CategoricalAccuracy()])
 
     classifier.fit(train_images, train_labels, epochs=epochs, validation_split=0.1, batch_size=128)
 
@@ -85,35 +86,42 @@ def train_classifier(train_images, train_labels, test_images, test_labels, epoch
     return classifier, results
 
 
-def train_cifar_classifier_real():
-    print('CIFAR10 REAL')
-    (train_img, train_lab), (test_img, test_lab) = tf.keras.datasets.cifar10.load_data()
+def train_cifar_h_classifier_real():
+    print('CIFAR10-H REAL')
+    (test_images, test_labels), (_, _) = tf.keras.datasets.cifar10.load_data()
+    train_images, train_labels = get_data_CIFAR10H_probs()
 
-    train_img = tf.image.resize(train_img, [32,32])
-    test_img = tf.image.resize(test_img, [32, 32])
+    test_labels = tf.one_hot(test_labels, 10)
 
-    train_img = train_img / 255.
-    test_img = test_img / 255.
+    train_images = train_images / 255.
+    test_images = test_images / 255.
 
-    shuffled_indices = tf.random.shuffle(tf.range(train_img.shape[0]))
-    train_img  = tf.gather(train_img, shuffled_indices)
-    train_lab = tf.gather(train_lab, shuffled_indices)
+    shuffled_indices = tf.random.shuffle(tf.range(train_images.shape[0]))
+    shuffled_indices = shuffled_indices[:3000]  # match 300 per class
+    train_images = tf.gather(train_images, shuffled_indices)
+    train_labels = tf.gather(train_labels, shuffled_indices)
 
-    print(train_img.shape)
-    print(train_lab.shape)
+    print(train_images.shape)
+    print(train_labels.shape)
 
-    classifier, results = train_classifier(train_img, train_lab, test_img, test_lab)
+    classifier, results = train_classifier(train_images, train_labels, test_images, test_labels)
 
     return classifier
 
 
-def train_cifar_classifier_fake():
-    print('CIFAR10 FAKE')
-    images, labels = load_cifar_images()
+def train_cifar_h_classifier_fake():
+    print('CIFAR10-H FAKE')
+    images, labels = load_cifar_h_images()
     print(images.shape)
     print(labels.shape)
 
-    (_, _), (test_images, test_labels) = tf.keras.datasets.cifar10.load_data()
+    labels = tf.cast(labels, tf.uint8)
+
+    (test_images, test_labels), (_, _) = tf.keras.datasets.cifar10.load_data()
+
+    labels = tf.one_hot(labels, 10)
+    test_labels = tf.one_hot(test_labels, 10)
+    test_labels = tf.squeeze(test_labels)
 
     images = images / 255.
     test_images = test_images / 255.
@@ -122,32 +130,30 @@ def train_cifar_classifier_fake():
     images = tf.gather(images, shuffled_indices)
     labels = tf.gather(labels, shuffled_indices)
 
-    test_images = tf.image.resize(test_images, [32, 32])
-
     classifier, results = train_classifier(images, labels, test_images, test_labels)
 
     return classifier
 
 
-def train_cifar_classifier_combined():
-    print('CIFAR10 COMBINED')
-    fake_images, fake_labels = load_cifar_images()
-    (real_images, real_labels), (test_images, test_labels) = tf.keras.datasets.cifar10.load_data()
+def train_cifar_h_classifier_combined():
+    print('CIFAR10-H COMBINED')
+    fake_images, fake_labels = load_cifar_h_images()
+    fake_labels = tf.cast(fake_labels, tf.uint8)
+    fake_labels = tf.one_hot(fake_labels, 10)
+    (test_images, test_labels), (_, _) = tf.keras.datasets.cifar10.load_data()
+    test_labels = tf.one_hot(test_labels, 10, dtype=tf.float32)
 
-    # fake_images = tf.expand_dims(fake_images, -1)
-    # real_images = tf.expand_dims(real_images, -1)
-    # test_images = tf.expand_dims(test_images, -1)
+    real_images, real_labels = get_data_CIFAR10H_probs()
+    shuffled_indices = tf.random.shuffle(tf.range(real_images.shape[0]))
+    shuffled_indices = shuffled_indices[:3000]  # match 300 per class
+    real_images = tf.gather(real_images, shuffled_indices)
+    real_labels = tf.gather(real_labels, shuffled_indices)
 
-    fake_images = tf.cast(fake_images, tf.float32)
-    real_images = tf.cast(real_images, tf.float32)
-    test_images = tf.cast(test_images, tf.float32)
+    real_labels = tf.cast(real_labels, tf.float32)
 
     fake_images = fake_images / 255.0
     real_images = real_images / 255.0
     test_images = test_images / 255.0
-
-    real_images = tf.image.resize(real_images, [32, 32])
-    test_images = tf.image.resize(test_images, [32, 32])
 
     images = tf.concat([fake_images, real_images], 0)
     labels = tf.concat([fake_labels, real_labels], 0)
@@ -156,13 +162,15 @@ def train_cifar_classifier_combined():
     images = tf.gather(images, shuffled_indices)
     labels = tf.gather(labels, shuffled_indices)
 
+    test_labels = tf.squeeze(test_labels)
+
     classifier, results = train_classifier(images, labels, test_images, test_labels, epochs=8)
 
     return classifier
 
 
 if __name__ == '__main__':
-    # load_cifar_images()
-    # train_cifar_classifier_real()
-    train_cifar_classifier_fake()
-    train_cifar_classifier_combined()
+    # load_cifar_h_images()
+    # train_cifar_h_classifier_real()
+    # train_cifar_h_classifier_fake()
+    train_cifar_h_classifier_combined()

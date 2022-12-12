@@ -14,7 +14,7 @@ def load_mnist_images():
         return tf.convert_to_tensor(np_images), tf.convert_to_tensor(np_labels)
         # return tf.io.read_file('data/mnist_fake/images'), tf.io.read_file('data/mnist_fake/labels')
 
-    root_directory = 'images/mnist/'
+    root_directory = 'images/mnist'
     all_images = []
     all_labels = []
     for i in range(10):
@@ -42,6 +42,7 @@ def load_mnist_images():
 
     print('Saving tensors')
     # tf.io.write_file('data/mnist_fake/images', images)
+    os.makedirs('data/mnist_fake')
     np.save('data/mnist_fake/images.npy', np_images)
     print('Saved images')
     # tf.io.write_file('data/mnist_fake/labels', labels)
@@ -166,6 +167,6 @@ def train_mnist_classifier_combined():
 
 if __name__ == '__main__':
     # load_mnist_images()
-    # train_mnist_classifier_real()
+    train_mnist_classifier_real()
     train_mnist_classifier_fake()
-    # train_mnist_classifier_combined()
+    train_mnist_classifier_combined()

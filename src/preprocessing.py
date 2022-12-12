@@ -144,3 +144,24 @@ def get_data_CIFAR10H_counts(subset, return_one_hot = True):  # subset is a null
     print(image.shape, label.shape)
 
     return image, label
+
+def get_data_CIFAR10H_probs():
+    (_, _), (test_image, test_label) = tf.keras.datasets.cifar10.load_data()
+    #10,000 images from the test set
+
+    depth = 10
+
+    # image resizing is unecessary, so it is commented out
+    # RGB values are normalized between 0 and 1
+    # labels are converted into one hot tensors
+    test_image = tf.cast(test_image, tf.float32)
+    # test_image = tf.expand_dims(test_image, axis=-1)
+    # test_image = tf.image.resize(test_image, [32,32,3])
+    image = test_image / 255.0
+
+    # CIFAR10H_file_path = '../data/cifar10h-probs.npy'
+    CIFAR10H_file_path = 'data/cifar10h-probs.npy'
+    probability_labels = np.load(CIFAR10H_file_path)
+    probability_labels = tf.convert_to_tensor(probability_labels)
+
+    return test_image, probability_labels
